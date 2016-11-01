@@ -65,7 +65,8 @@ void print_prompt(void)
 	char username[1024];
 	username[1023] = '\0';
 	// Get username
-	getlogin_r(username, 1023);
+	// getlogin_r(username, 1023); // Does not work on ubuntu. Use getenv instead.
+	strncpy(username, getenv("USER"), 1023);
 
 	// Hostname buffer
 	char hostname[1024];
@@ -79,8 +80,13 @@ void print_prompt(void)
 	// Get working directory
 	getcwd(work_dir, 1023);
 
+	// Get relative path of the working directory
+	char relative_path[1024];
+	relative_path[1023] = '\0';
+	strncpy(relative_path, strrchr(work_dir, '/') + 1, 1023); // +1 for not including the / sign
+
 	// Print prompt line
 	printf("%s@", username);
 	printf("%s ", hostname);
-	printf("%s > ", work_dir);
+	printf("%s > ", relative_path);
 }
