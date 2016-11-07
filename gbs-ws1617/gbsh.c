@@ -1,7 +1,7 @@
-# Team 4, members:
-# 1. Christian Schirmer
-# 2. Owen Wilcox
-# 3. Bora Özgen
+//# Team 4, members:
+//# 1. Christian Schirmer
+//# 2. Owen Wilcox
+//# 3. Bora Özgen
 
 
 #include <stdio.h>
