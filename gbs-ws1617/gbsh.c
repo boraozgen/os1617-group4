@@ -9,10 +9,10 @@
 #include <unistd.h>
 #include <string.h>
 #include <dirent.h> // Directory management
+#include <fcntl.h>	// open()
 
 #define ENVAR_VAR_LENGTH		100
 #define ENVAR_VALUE_LENGTH		100
-#define ENVAR_MAX_COUNT			100
 
 // Linked list structure for environment variables
 struct envar {
@@ -22,6 +22,7 @@ struct envar {
 	struct envar *next;
 };
 
+// Linked list head and current node pointers
 struct envar* head = NULL;
 struct envar* current = NULL;
 
@@ -31,6 +32,9 @@ int get_argc(char* command);
 struct envar* find(char* key);
 struct envar* delete(char* key);
 void add_shell_envar(char* gbsh_path);
+int check_redirect_output(char* command);
+void restore_stdout(int saved_stdout);
+void check_redirect_input(char* command);
 
 // Environment variables (declared in unistd.h)
 extern char **environ;
@@ -61,32 +65,38 @@ int main(int argc, char *argv[]) {
 		fgets(command, 1023, stdin);
 
 		// Process commands: Assignment 1
-		if (!strncmp(command, "exit\n", 1024))
+		if (!strncmp(command, "exit", 4))
 		{
 			// Exit program
 			exit(0);
 		}
-		else if (!strncmp(command, "pwd\n", 1024))
+		else if (!strncmp(command, "pwd", 3))
 		{
+			int saved_stdout = check_redirect_output(command);
+
 			// Working directory buffer
 			char work_dir[1024];
 			work_dir[1023] = '\0';
 			// Get working directory
 			getcwd(work_dir, 1023);
 			printf("%s\n", work_dir);
+
+			restore_stdout(saved_stdout);
 		}
-		else if (!strncmp(command, "clear\n", 1024))
+		else if (!strncmp(command, "clear", 5))
 		{
 			// Clear the screen
 			system("clear");
 		}
 		// Process commands: Assignment 2
-		// TODO: somehow invalidate 'lsxxx' type of commands
+		// TODO: somehow invalidate 'lsxxx' type of commands. Plus general faulty input checks.
 		else if (!strncmp(command, "ls", 2))
 		{
 			// Check argument count
-			if (get_argc(command) == 1)
+			if (get_argc(command) > 0)
 			{
+				int saved_stdout = check_redirect_output(command);
+
 				// Get directory string from the argument
 				char * pch;
 				pch = strtok(command, " \n\t");
@@ -106,6 +116,8 @@ int main(int argc, char *argv[]) {
 				}
 				else
 					perror ("Couldn't open the directory. Error");
+
+				restore_stdout(saved_stdout);
 			}
 			else
 			{
@@ -152,10 +164,12 @@ int main(int argc, char *argv[]) {
 				printf("Invalid arguments.\n");
 			}
 		}
-		else if (!strncmp(command, "environ\n", 10))
+		else if (!strncmp(command, "environ", 7))
 		{
 			if (head != NULL)
 			{
+				int saved_stdout = check_redirect_output(command);
+
 				struct envar *ptr = head;
 				printf("Current environment variables:\n");
 
@@ -164,6 +178,8 @@ int main(int argc, char *argv[]) {
 					printf("%s=%s\n", ptr->variable, ptr->value);
 					ptr = ptr->next;
 				}
+
+				restore_stdout(saved_stdout);
 			}
 			else
 			{
@@ -259,6 +275,7 @@ int main(int argc, char *argv[]) {
 			else
 			{
 				// Assume program invocation
+
 				pid_t pid = fork();
 
 				if (pid == -1)
@@ -281,11 +298,16 @@ int main(int argc, char *argv[]) {
 					char** argv;	// Argument array pointer
 					// char* envp[2];	// Environment variable array pointer
 
+					// TODO: '< input > output' is ok but '> output < input' does not work. Probably functions damage the main string.
+					check_redirect_output(command);
+					check_redirect_input(command);
+
 					// Get first token (in this case command path)
 					pch = strtok(command, " \n\t");
 					// Save executable path
 					path = malloc(strlen(pch)+1);
 					strncpy(path, pch, strlen(pch));
+					printf("Command path: %s\n", path);
 
 					// Allocate memory for argument string pointers
 					argv = malloc((argc + 2) * sizeof(char*)); // arguments + 2 for the executable itself and NULL pointer
@@ -302,6 +324,8 @@ int main(int argc, char *argv[]) {
 						{
 							// Get next token (in this case argument)
 							pch = strtok(NULL, " \n\t");
+							// Break if < or > sign is found
+							if (!strncmp(pch, ">", 1) || !strncmp(pch, "<", 1)) break;
 							// Allocate memory
 							argv[i] = malloc(strlen(pch)+1);
 							// Copy string
@@ -513,4 +537,97 @@ void add_shell_envar(char* gbsh_path)
 	link->next = head;
 	// Point first to new first node
 	head = link;
+}
+
+// Check if command includes argument '>'. If so, open file using open() and duplicate output using dup2()	
+int check_redirect_output(char* command)
+{
+	int saved_stdout = 0;
+
+	char* output_symbol_location = strstr(command, " > ");
+	if (output_symbol_location)
+	{
+		// Get the output filename
+		char* file = strtok(output_symbol_location + 3, " \n");
+		if (file)
+		{
+			// Open file write only, append, create if not exists. Set read rights to creater.
+			int fd = open(file, O_WRONLY | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR);
+			if (fd > 0)
+			{
+				// Store current stdout
+				saved_stdout = dup(1);
+
+				printf("Redirecting stdout to file: %s\n", file);
+
+				// File opened, redirect stdout (1) to file descriptor
+				if (dup2(fd, 1) != -1)
+				{
+					close(fd); // File no longer needed.
+				}
+				else
+				{
+					perror("Unable to dup2. Error");
+				}
+			}
+			else
+			{
+				perror("Unable to open file. Error");
+			}
+		}
+		else
+		{
+			printf("No file specified.\n");
+		}
+	}
+
+	return saved_stdout;
+}
+
+// Check input. If stdout is redirected, restore it.
+void restore_stdout(int saved_stdout)
+{
+	if (saved_stdout)
+	{
+		dup2(saved_stdout, 1);
+		close(saved_stdout);
+	}
+}
+
+// Check if command includes argument '<'. If so, open file using open() and duplicate input using dup2()
+void check_redirect_input(char* command)
+{
+	char* input_symbol_location = strstr(command, " < ");
+	if (input_symbol_location)
+	{
+		// Get the input filename
+		char* file = strtok(input_symbol_location + 3, " \n");
+		printf("Filename: %s\n",file );
+		if (file)
+		{
+			// Open file read-only
+			int fd = open(file, O_RDONLY);
+			if (fd > 0)
+			{
+				printf("Redirecting stdin to file: %s\n", file);
+				// File opened, redirect stdin (0) to file descriptor
+				if (dup2(fd, 0) != -1)
+				{
+					close(fd); // File no longer needed.
+				}
+				else
+				{
+					perror("Unable to dup2. Error");
+				}
+			}
+			else
+			{
+				perror("Unable to open file. Error");
+			}
+		}
+		else
+		{
+			printf("No file specified.\n");
+		}
+	}
 }
