@@ -4,6 +4,8 @@
 //# 3. Bora Özgen
 
 #define _GNU_SOURCE // for execvpe()
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -372,7 +374,9 @@ int main(int argc, char *argv[]) {
 
 					// Free allocated memory
 					free(path);
-					for(int i=0; i < argc+2; i++)
+
+					int i;
+					for(i=0; i < argc+2; i++)
 					{
 						free(argv[i]);
 					}
