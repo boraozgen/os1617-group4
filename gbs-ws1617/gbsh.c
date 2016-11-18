@@ -13,27 +13,9 @@
 #include <dirent.h> // Directory management
 #include <fcntl.h>	// open()
 
-#define ENVAR_VAR_LENGTH		100
-#define ENVAR_VALUE_LENGTH		100
-
-// Linked list structure for environment variables
-struct envar {
-	// TODO: can we dynamically allocate these too? Also: only one string is enough eg. 'shell=path'
-	char variable[ENVAR_VAR_LENGTH + 1];
-	char value[ENVAR_VALUE_LENGTH + 1];
-	struct envar *next;
-};
-
-// Linked list head and current node pointers
-struct envar* head = NULL;
-struct envar* current = NULL;
-
 // Function prototypes
 void print_prompt(void);
 int get_argc(char* command);
-struct envar* find(char* key);
-struct envar* delete(char* key);
-void add_shell_envar(char* gbsh_path);
 int check_redirect_output(char* command);
 void restore_stdout(int saved_stdout);
 void check_redirect_input(char* command);
@@ -51,12 +33,12 @@ int main(int argc, char *argv[]) {
 	command[1023] = '\0';
 
 	// Get path of gbsh
-	char gbsh_path[ENVAR_VAR_LENGTH];
-	getcwd(gbsh_path, ENVAR_VAR_LENGTH);
+	char gbsh_path[100];
+	getcwd(gbsh_path, 100);
 	strncat(gbsh_path, "/gbsh", 5);
 
 	// Add initial 'shell' envar
-	add_shell_envar(gbsh_path);
+	setenv("shell", gbsh_path, 1);
 
 	// Main loop
 	while (1)
@@ -168,25 +150,14 @@ int main(int argc, char *argv[]) {
 		}
 		else if (!strncmp(command, "environ", 7))
 		{
-			if (head != NULL)
-			{
-				int saved_stdout = check_redirect_output(command);
+			int saved_stdout = check_redirect_output(command);
 
-				struct envar *ptr = head;
-				printf("Current environment variables:\n");
-
-				// Traverse through the linked list
-				while (ptr != NULL) {
-					printf("%s=%s\n", ptr->variable, ptr->value);
-					ptr = ptr->next;
-				}
-
-				restore_stdout(saved_stdout);
+			int i = 0;
+			while(environ[i]) {
+		  		printf("%s\n", environ[i++]);
 			}
-			else
-			{
-				printf("No environment variables found.\n");
-			}
+
+			restore_stdout(saved_stdout);
 		}
 		else if (!strncmp(command, "setenv", 6))
 		{
@@ -200,32 +171,32 @@ int main(int argc, char *argv[]) {
 				strtok(command, " \n\t");
 				arg1 = strtok(NULL, " \n\t");
 
-				if (!find(arg1))
+				if (getenv(arg1) == NULL)
 				{
-					// Create new environment variable node
-					struct envar *link = (struct envar*) malloc(sizeof(struct envar));
-					// Place null terminators for security
-					link->variable[ENVAR_VAR_LENGTH] = '\0';
-					link->value[ENVAR_VALUE_LENGTH] = '\0';
-					// Copy inputs to envar
-					strncpy(link->variable, arg1, ENVAR_VAR_LENGTH);
 					if (argc == 2)
 					{
 						char* arg2;
 						arg2 = strtok(NULL, " \n\t");
-						strncpy(link->value, arg2, ENVAR_VALUE_LENGTH);
-						printf("Setting environment variable %s to %s.\n", arg1, arg2);
+						if (!setenv(arg1, arg2, 1))
+						{
+							printf("Setting environment variable %s to %s.\n", arg1, arg2);
+						}
+						else
+						{
+							perror("setenv error");
+						}
 					}
 					else
 					{
-						strncpy(link->value, "\0", ENVAR_VALUE_LENGTH);
-						printf("Setting environment variable %s to the empty string.\n", arg1);
+						if (!setenv(arg1, "", 1))
+						{
+							printf("Setting environment variable %s to the empty string.\n", arg1);
+						}
+						else
+						{
+							perror("setenv error");
+						}
 					}
-
-					// Point it to old first node
-					link->next = head;
-					// Point first to new first node
-					head = link;
 				}
 				else
 				{
@@ -251,13 +222,20 @@ int main(int argc, char *argv[]) {
 				strtok(command, " \n\t");
 				arg1 = strtok(NULL, " \n\t");
 
-				if (delete(arg1))
+				if (getenv(arg1) != NULL)
 				{
-					printf("Environment variable %s deleted.\n", arg1);
+					if (!unsetenv(arg1))
+					{
+						printf("Environment variable %s deleted.\n", arg1);
+					}
+					else
+					{
+						perror("unsetenv error");
+					}
 				}
 				else
 				{
-					printf("Environment variable %s not found.\n", arg1);
+					printf("No environment variable %s found\n", arg1);
 				}
 			}
 			else
@@ -451,96 +429,6 @@ int get_argc(char* command)
 	}
 
 	return argc;
-}
-
-// Find an environment variable with given string key
-struct envar* find(char* key) 
-{
-	//start from the first link
-	struct envar* current = head;
-
-	//if list is empty
-	if(head == NULL) 
-	{
-		return NULL;
-	}
-
-	//navigate through list
-	while(strncmp(current->variable, key, ENVAR_VAR_LENGTH)) 
-	{
-		//if it is last node
-		if(current->next == NULL) 
-		{
-			return NULL;
-		} 
-		else 
-		{
-			//go to next link
-			current = current->next;
-		}
-	}      
-
-	//if data found, return the current Link
-	return current;
-}
-
-// Delete an environment variable with given string key
-struct envar* delete(char* key) {
-
-	//start from the first link
-	struct envar* current = head;
-	struct envar* previous = NULL;
-
-	//if list is empty
-	if(head == NULL) {
-	  return NULL;
-	}
-
-	//navigate through list
-	while(strncmp(current->variable, key, ENVAR_VAR_LENGTH)) {
-
-	  //if it is last node
-	  if(current->next == NULL) {
-	     return NULL;
-	  } else {
-	     //store reference to current link
-	     previous = current;
-	     //move to next link
-	     current = current->next;
-	  }
-	}
-
-	//found a match, update the link
-	if(current == head) {
-	  //change first to point to next link
-	  head = head->next;
-	} else {
-	  //bypass the current link
-	  previous->next = current->next;
-	}
-
-	// Free allocated memory
-	free(current);
-
-	return current;
-}
-
-// Add initial shell envar
-void add_shell_envar(char* gbsh_path)
-{
-	// Create new environment variable node
-	struct envar *link = (struct envar*) malloc(sizeof(struct envar));
-	// Place null terminators for security
-	link->variable[ENVAR_VAR_LENGTH] = '\0';
-	link->value[ENVAR_VALUE_LENGTH] = '\0';
-	// Copy strings to envar
-	strncpy(link->variable, "shell", ENVAR_VAR_LENGTH);
-	strncpy(link->value, gbsh_path, ENVAR_VALUE_LENGTH);
-	
-	// Point it to old first node
-	link->next = head;
-	// Point first to new first node
-	head = link;
 }
 
 // Check if command includes argument '>'. If so, open file using open() and duplicate output using dup2()	
