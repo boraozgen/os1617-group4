@@ -13,6 +13,9 @@
 #include <dirent.h> // Directory management
 #include <fcntl.h>	// open()
 
+// Uncomment to receive debug messages
+// #define GBSH_DEBUG
+
 // Function prototypes
 void print_prompt(void);
 int get_argc(char* command);
@@ -55,16 +58,21 @@ int main(int argc, char *argv[]) {
 		// Copy the input for further processing
 		strcpy(command, input);
 		// Get first token from input
-		char* first_arg;
-		first_arg = strtok(input, " \n\t");
+		char* first_tok;
+		first_tok = strtok(input, " \n\t");
+		// Check empty string case
+		if (first_tok == NULL)
+		{
+			continue;
+		}
 
 		// Process commands: Assignment 1
-		if (!strcmp(first_arg, "exit"))
+		if (!strcmp(first_tok, "exit"))
 		{
 			// Exit program
 			exit(0);
 		}
-		else if (!strcmp(first_arg, "pwd"))
+		else if (!strcmp(first_tok, "pwd"))
 		{
 			int saved_stdout = check_redirect_output(command);
 
@@ -77,14 +85,13 @@ int main(int argc, char *argv[]) {
 
 			restore_stdout(saved_stdout);
 		}
-		else if (!strcmp(first_arg, "clear"))
+		else if (!strcmp(first_tok, "clear"))
 		{
 			// Clear the screen
 			system("clear");
 		}
 		// Process commands: Assignment 2
-		// TODO: somehow invalidate 'lsxxx' type of commands. Plus general faulty input checks.
-		else if (!strcmp(first_arg, "ls"))
+		else if (!strcmp(first_tok, "ls"))
 		{
 			// Check argument count
 			if (get_argc(command) > 0)
@@ -120,7 +127,7 @@ int main(int argc, char *argv[]) {
 			}
 
 		}
-		else if (!strcmp(first_arg, "cd"))
+		else if (!strcmp(first_tok, "cd"))
 		{
 			int argc = get_argc(command);
 			// Check argument count
@@ -158,7 +165,7 @@ int main(int argc, char *argv[]) {
 				printf("Invalid arguments.\n");
 			}
 		}
-		else if (!strcmp(first_arg, "environ"))
+		else if (!strcmp(first_tok, "environ"))
 		{
 			int saved_stdout = check_redirect_output(command);
 
@@ -169,7 +176,7 @@ int main(int argc, char *argv[]) {
 
 			restore_stdout(saved_stdout);
 		}
-		else if (!strcmp(first_arg, "setenv"))
+		else if (!strcmp(first_tok, "setenv"))
 		{
 			int argc = get_argc(command);
 
@@ -220,7 +227,7 @@ int main(int argc, char *argv[]) {
 				printf("Invalid arguments.\n");
 			}
 		}
-		else if (!strcmp(first_arg, "unsetenv"))
+		else if (!strcmp(first_tok, "unsetenv"))
 		{
 			int argc = get_argc(command);
 			
@@ -278,7 +285,9 @@ int main(int argc, char *argv[]) {
 					// Parent process waits for the child
 					int status;
 					waitpid(pid, &status, 0);
+					#ifdef GBSH_DEBUG
 					printf("Child return status: %d\n", status);
+					#endif
 				}
 				else 
 				{
@@ -288,7 +297,6 @@ int main(int argc, char *argv[]) {
 					char** argv;	// Argument array pointer
 					// char* envp[2];	// Environment variable array pointer
 
-					// TODO: '< input > output' is ok but '> output < input' does not work. Probably functions damage the main string.
 					check_redirect_output(command);
 					check_redirect_input(command);
 
@@ -297,7 +305,10 @@ int main(int argc, char *argv[]) {
 					// Save executable path
 					path = malloc(strlen(pch)+1);
 					strncpy(path, pch, strlen(pch));
+
+					#ifdef GBSH_DEBUG
 					printf("Command path: %s\n", path);
+					#endif
 
 					// Allocate memory for argument string pointers
 					argv = malloc((argc + 2) * sizeof(char*)); // arguments + 2 for the executable itself and NULL pointer
@@ -321,7 +332,9 @@ int main(int argc, char *argv[]) {
 							// Copy string
 							strcpy(argv[i], pch);
 
+							#ifdef GBSH_DEBUG
 							printf("Argument %d: %s\n", i, argv[i]);
+							#endif
 						}
 						// NULL terminate the array
 						argv[++i] = NULL;
@@ -331,29 +344,18 @@ int main(int argc, char *argv[]) {
 						printf("Could not malloc.\n");
 					}
     				
-    				/* TODO: How to pass environment variables?
-    					execve does not execute without specifying the path.
-    					Also passing PATH as an envar does not help.
-    					A possibility: adding the required 'parent' envar to char** environ.
-    					*/
-    				/*
-					extern char** environ;
-					envp = malloc(sizeof(environ) + 1*sizeof(char*));
-					memcpy(&envp, &environ, sizeof(environ));*/
-
-					/*
-					// Add environment variable 'parent'
-					envp[0] = malloc(strlen(gbsh_path) + 10); // 10 for additional envar name
-					strcpy(envp[0], "parent=");
-					strcat(envp[0], gbsh_path);
-					envp[1] = malloc(50);
-					strcpy(envp[1], "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
-
-					char *env_args[] = { "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", "USER=boraozgen", NULL };
-
-					printf("environment variable: %s\n", envp[0]);
-					// execve(path, argv, env_args);
-					*/
+    				// Set 'parent' environment variable. 
+    				// execvp takes the environment for the new process image from the external variable environ in the calling process.
+					if (!setenv("parent", gbsh_path, 1))
+					{
+						#ifdef GBSH_DEBUG
+						printf("Setting environment variable 'parent' to %s.\n", gbsh_path);
+						#endif
+					}
+					else
+					{
+						perror("setenv error");
+					}
 					
 					// Problems when executing with argv[0] instead of path. Why?
 					execvp(path, argv);
@@ -446,7 +448,11 @@ int check_redirect_output(char* command)
 {
 	int saved_stdout = 0;
 
-	char* output_symbol_location = strstr(command, " > ");
+	// Duplicate the command for token processing
+	char command_dup[1024];
+	strncpy(command_dup, command, 1023);	
+
+	char* output_symbol_location = strstr(command_dup, " > ");
 	if (output_symbol_location)
 	{
 		// Get the output filename
@@ -460,7 +466,9 @@ int check_redirect_output(char* command)
 				// Store current stdout
 				saved_stdout = dup(1);
 
+				#ifdef GBSH_DEBUG
 				printf("Redirecting stdout to file: %s\n", file);
+				#endif
 
 				// File opened, redirect stdout (1) to file descriptor
 				if (dup2(fd, 1) != -1)
@@ -499,19 +507,28 @@ void restore_stdout(int saved_stdout)
 // Check if command includes argument '<'. If so, open file using open() and duplicate input using dup2()
 void check_redirect_input(char* command)
 {
-	char* input_symbol_location = strstr(command, " < ");
+	// Duplicate the command for token processing
+	char command_dup[1024];
+	strncpy(command_dup, command, 1023);
+
+	char* input_symbol_location = strstr(command_dup, " < ");
 	if (input_symbol_location)
 	{
 		// Get the input filename
 		char* file = strtok(input_symbol_location + 3, " \n");
+
+		#ifdef GBSH_DEBUG
 		printf("Filename: %s\n",file );
+		#endif
 		if (file)
 		{
 			// Open file read-only
 			int fd = open(file, O_RDONLY);
 			if (fd > 0)
 			{
+				#ifdef GBSH_DEBUG
 				printf("Redirecting stdin to file: %s\n", file);
+				#endif
 				// File opened, redirect stdin (0) to file descriptor
 				if (dup2(fd, 0) != -1)
 				{
