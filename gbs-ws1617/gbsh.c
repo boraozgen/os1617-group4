@@ -28,14 +28,19 @@ int main(int argc, char *argv[]) {
 	
 	printf("\nWelcome to the gbsh shell!\n\n");
 
+	// Input buffer
+	char input[1024];
+	input[1023] = '\0';
+
 	// Command buffer
 	char command[1024];
 	command[1023] = '\0';
 
 	// Get path of gbsh
-	char gbsh_path[100];
-	getcwd(gbsh_path, 100);
-	strncat(gbsh_path, "/gbsh", 5);
+	char gbsh_path[1024];
+	gbsh_path[1023] = '\0';
+	getcwd(gbsh_path, 1023-5);
+	strcat(gbsh_path, "/gbsh");
 
 	// Add initial 'shell' envar
 	setenv("shell", gbsh_path, 1);
@@ -45,16 +50,21 @@ int main(int argc, char *argv[]) {
 	{
 		// Print command prompt
 		print_prompt();
-		// Wait for command
-		fgets(command, 1023, stdin);
+		// Wait for input
+		fgets(input, 1023, stdin);
+		// Copy the input for further processing
+		strcpy(command, input);
+		// Get first token from input
+		char* first_arg;
+		first_arg = strtok(input, " \n\t");
 
 		// Process commands: Assignment 1
-		if (!strncmp(command, "exit", 4))
+		if (!strcmp(first_arg, "exit"))
 		{
 			// Exit program
 			exit(0);
 		}
-		else if (!strncmp(command, "pwd", 3))
+		else if (!strcmp(first_arg, "pwd"))
 		{
 			int saved_stdout = check_redirect_output(command);
 
@@ -67,14 +77,14 @@ int main(int argc, char *argv[]) {
 
 			restore_stdout(saved_stdout);
 		}
-		else if (!strncmp(command, "clear", 5))
+		else if (!strcmp(first_arg, "clear"))
 		{
 			// Clear the screen
 			system("clear");
 		}
 		// Process commands: Assignment 2
 		// TODO: somehow invalidate 'lsxxx' type of commands. Plus general faulty input checks.
-		else if (!strncmp(command, "ls", 2))
+		else if (!strcmp(first_arg, "ls"))
 		{
 			// Check argument count
 			if (get_argc(command) > 0)
@@ -110,7 +120,7 @@ int main(int argc, char *argv[]) {
 			}
 
 		}
-		else if (!strncmp(command, "cd", 2))
+		else if (!strcmp(first_arg, "cd"))
 		{
 			int argc = get_argc(command);
 			// Check argument count
@@ -148,7 +158,7 @@ int main(int argc, char *argv[]) {
 				printf("Invalid arguments.\n");
 			}
 		}
-		else if (!strncmp(command, "environ", 7))
+		else if (!strcmp(first_arg, "environ"))
 		{
 			int saved_stdout = check_redirect_output(command);
 
@@ -159,7 +169,7 @@ int main(int argc, char *argv[]) {
 
 			restore_stdout(saved_stdout);
 		}
-		else if (!strncmp(command, "setenv", 6))
+		else if (!strcmp(first_arg, "setenv"))
 		{
 			int argc = get_argc(command);
 
@@ -210,7 +220,7 @@ int main(int argc, char *argv[]) {
 				printf("Invalid arguments.\n");
 			}
 		}
-		else if (!strncmp(command, "unsetenv", 8))
+		else if (!strcmp(first_arg, "unsetenv"))
 		{
 			int argc = get_argc(command);
 			
