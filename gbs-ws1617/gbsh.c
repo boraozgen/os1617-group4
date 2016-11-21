@@ -13,8 +13,11 @@
 #include <dirent.h> // Directory management
 #include <fcntl.h>	// open()
 
+// Define boolean type
+typedef enum { false, true } bool;
+
 // Uncomment to receive debug messages
-// #define GBSH_DEBUG
+#define GBSH_DEBUG
 
 // Function prototypes
 void print_prompt(void);
@@ -22,6 +25,8 @@ int get_argc(char* command);
 int check_redirect_output(char* command);
 void restore_stdout(int saved_stdout);
 void check_redirect_input(char* command);
+bool check_ampersand(char* command);
+void sigchld_handler(int sig);
 
 // Environment variables (declared in unistd.h)
 extern char **environ;
@@ -284,10 +289,29 @@ int main(int argc, char *argv[]) {
 				{
 					// Parent process waits for the child
 					int status;
-					waitpid(pid, &status, 0);
-					#ifdef GBSH_DEBUG
-					printf("Child return status: %d\n", status);
-					#endif
+
+					// Check if process is going to run in the background
+					bool background_process = check_ampersand(command);
+					
+					// Handle SIGCHLD
+					signal(SIGCHLD, sigchld_handler);
+
+					// background_process ? waitpid(pid, &status, WNOHANG) : waitpid(pid, &status, 0);
+					if (background_process)
+					{
+						// Immediately return to command prompt
+						waitpid(pid, &status, WNOHANG);
+						printf("Pid [%d] running in the background...\n", pid);
+					}
+					else
+					{
+						// Wait for child to return
+						waitpid(pid, &status, 0);
+
+						#ifdef GBSH_DEBUG
+						// printf("Child return status: %d\n", status);
+						#endif
+					}
 				}
 				else 
 				{
@@ -326,7 +350,7 @@ int main(int argc, char *argv[]) {
 							// Get next token (in this case argument)
 							pch = strtok(NULL, " \n\t");
 							// Break if < or > sign is found
-							if (!strncmp(pch, ">", 1) || !strncmp(pch, "<", 1)) break;
+							if (!strncmp(pch, ">", 1) || !strncmp(pch, "<", 1) || !strncmp(pch, "&", 1)) break;
 							// Allocate memory
 							argv[i] = malloc(strlen(pch)+1);
 							// Copy string
@@ -549,4 +573,28 @@ void check_redirect_input(char* command)
 			printf("No file specified.\n");
 		}
 	}
+}
+
+// Check if command includes argument '&'. If so, return true
+bool check_ampersand(char* command)
+{
+	// Duplicate the command for token processing
+	char command_dup[1024];
+	strncpy(command_dup, command, 1023);
+
+	char* ampersand_location = strstr(command_dup, " &");
+	return ampersand_location ? true : false;
+}
+
+// Handles the SIGCHLD signal from the child and prints termination message
+void sigchld_handler(int sig)
+{
+	pid_t pid;
+	int status;
+
+	pid = wait(&status);
+	
+	#ifdef GBSH_DEBUG
+	printf("Pid [%d] returned %d.\n", pid, status);
+	#endif
 }
