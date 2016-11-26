@@ -2,7 +2,7 @@
 
 CC = gcc
 CFLAGS  = -Wall -g
-OBJ = gbsh.o
+OBJ = gbsh.o pipes.o
 
 all: gbsh
 

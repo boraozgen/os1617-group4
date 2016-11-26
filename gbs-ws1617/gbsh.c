@@ -12,9 +12,7 @@
 #include <string.h>
 #include <dirent.h> // Directory management
 #include <fcntl.h>	// open()
-
-// Define boolean type
-typedef enum { false, true } bool;
+#include "pipes.h"
 
 // Uncomment to receive debug messages
 #define GBSH_DEBUG
@@ -27,6 +25,7 @@ void restore_stdout(int saved_stdout);
 void check_redirect_input(char* command);
 bool check_ampersand(char* command);
 void sigchld_handler(int sig);
+bool check_pipe(char* command);
 
 // Environment variables (declared in unistd.h)
 extern char **environ;
@@ -63,6 +62,7 @@ int main(int argc, char *argv[]) {
 		// Copy the input for further processing
 		strcpy(command, input);
 		// Get first token from input
+		// IMPROVEMENT: Tokenize string just once. Put into an arg array. Pass that around.
 		char* first_tok;
 		first_tok = strtok(input, " \n\t");
 		// Check empty string case
@@ -314,60 +314,7 @@ int main(int argc, char *argv[]) {
 					}
 				}
 				else 
-				{
-					// Child process executes the program
-					char* pch;		// Dummy char pointer for strtok
-					char* path;		// Path pointer
-					char** argv;	// Argument array pointer
-					// char* envp[2];	// Environment variable array pointer
-
-					check_redirect_output(command);
-					check_redirect_input(command);
-
-					// Get first token (in this case command path)
-					pch = strtok(command, " \n\t");
-					// Save executable path
-					path = malloc(strlen(pch)+1);
-					strncpy(path, pch, strlen(pch));
-
-					#ifdef GBSH_DEBUG
-					printf("Command path: %s\n", path);
-					#endif
-
-					// Allocate memory for argument string pointers
-					argv = malloc((argc + 2) * sizeof(char*)); // arguments + 2 for the executable itself and NULL pointer
-
-					// NULL pointer check
-					if (argv != NULL)
-					{
-						// First element of argument array is the path itself
-						argv[0] = malloc(strlen(pch)+1);
-						strcpy(argv[0], pch);
-						int i=1;
-						// Allocate memory for strings
-						for (i=1; i < argc+1; i++)
-						{
-							// Get next token (in this case argument)
-							pch = strtok(NULL, " \n\t");
-							// Break if < or > sign is found
-							if (!strncmp(pch, ">", 1) || !strncmp(pch, "<", 1) || !strncmp(pch, "&", 1)) break;
-							// Allocate memory
-							argv[i] = malloc(strlen(pch)+1);
-							// Copy string
-							strcpy(argv[i], pch);
-
-							#ifdef GBSH_DEBUG
-							printf("Argument %d: %s\n", i, argv[i]);
-							#endif
-						}
-						// NULL terminate the array
-						argv[++i] = NULL;
-					}
-					else
-					{
-						printf("Could not malloc.\n");
-					}
-    				
+				{		
     				// Set 'parent' environment variable. 
     				// execvp takes the environment for the new process image from the external variable environ in the calling process.
 					if (!setenv("parent", gbsh_path, 1))
@@ -380,21 +327,71 @@ int main(int argc, char *argv[]) {
 					{
 						perror("setenv error");
 					}
-					
-					// Problems when executing with argv[0] instead of path. Why?
-					execvp(path, argv);
-					perror("exec error");
-					_exit(EXIT_FAILURE);   // exec never returns
 
-					// Free allocated memory
-					free(path);
-
-					int i;
-					for(i=0; i < argc+2; i++)
+					if (check_pipe(command))
 					{
-						free(argv[i]);
+						fork_pipes(command);
 					}
-					free(argv);
+					else
+					{
+						// Child process executes the program
+						char* pch;		// Dummy char pointer for strtok
+						char* path;		// Path pointer
+						char** argv;	// Argument array pointer
+						// char* envp[2];	// Environment variable array pointer
+
+						check_redirect_output(command);
+						check_redirect_input(command);
+
+						// Get first token (in this case command path)
+						pch = strtok(command, " \n\t");
+						// Save executable path
+						path = malloc(strlen(pch)+1);
+						strncpy(path, pch, strlen(pch));
+
+						#ifdef GBSH_DEBUG
+						printf("Command path: %s\n", path);
+						#endif
+
+						// Allocate memory for argument string pointers
+						argv = malloc((argc + 2) * sizeof(char*)); // arguments + 2 for the executable itself and NULL pointer
+
+						// NULL pointer check
+						if (argv != NULL)
+						{
+							// First element of argument array is the path itself
+							argv[0] = malloc(strlen(pch)+1);
+							strcpy(argv[0], pch);
+							int i=1;
+							// Allocate memory for strings
+							for (i=1; i < argc+1; i++)
+							{
+								// Get next token (in this case argument)
+								pch = strtok(NULL, " \n\t");
+								// Break if < or > sign is found
+								if (!strncmp(pch, ">", 1) || !strncmp(pch, "<", 1) || !strncmp(pch, "&", 1)) break;
+								// Allocate memory
+								argv[i] = malloc(strlen(pch)+1);
+								// Copy string
+								strcpy(argv[i], pch);
+
+								#ifdef GBSH_DEBUG
+								printf("Argument %d: %s\n", i, argv[i]);
+								#endif
+							}
+							// NULL terminate the array
+							argv[++i] = NULL;
+						}
+						else
+						{
+							printf("Could not malloc.\n");
+						}
+						
+						// Problems when executing with argv[0] instead of path. Why?
+						execvp(path, argv);
+						perror("exec error");
+						_exit(EXIT_FAILURE);   // exec never returns
+					}
 				}
 			}
 			
