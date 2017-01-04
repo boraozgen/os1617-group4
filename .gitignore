@@ -35,3 +35,6 @@
 .DS_Store
 gbs-ws1617/gbsh
 *.txt
+gbs-ws1617/daemon/gbsd
+gbs-ws1617/ipc/ipc-client
+gbs-ws1617/ipc/ipcd
