@@ -65,10 +65,15 @@ int main(int argc, char *argv[]) {
 
 	/* Daemon-specific initialization goes here */
 
+	/* Create directory if it does not exist */
+	struct stat st = {0};
+	if (stat("/tmp/bora", &st) == -1) {
+	    mkdir("/tmp/bora", 0755);
+	}
+
 	char* filename = "/tmp/bora/gbsd.log";
 	int daemon_pid = getpid();
 	int uptime = 0;
-	// TODO: make directory if it does not exist
 
 	/* The Big Loop */
 	while (1) {

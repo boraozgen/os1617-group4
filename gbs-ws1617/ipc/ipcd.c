@@ -3,6 +3,7 @@
 #include <sys/ipc.h> 
 #include <sys/shm.h> 
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -36,6 +37,9 @@ void log_message(char *filename, const char* format, ...) {
 int main(int argc, char *argv[]) {
 	
 	fprintf(stdout, "Initiating daemon...\n");
+
+	/* Log file */
+	char* filename = "/tmp/bora/ipcd.log";
         
 	/* Our process ID and Session ID */
 	pid_t pid, sid;
@@ -48,14 +52,12 @@ int main(int argc, char *argv[]) {
 	/* If we got a good PID, then
 	   we can exit the parent process. */
 	if (pid > 0) {
-		printf("Daemon forked.\n");
+		printf("Daemon created. Check log file %s\n", filename);
 		exit(EXIT_SUCCESS);
 	}
 
 	/* Change the file mode mask */
-	umask(0);
-	        
-	/* Open any logs here */        
+	umask(0);       
 	        
 	/* Create a new SID for the child process */
 	sid = setsid();
@@ -76,35 +78,37 @@ int main(int argc, char *argv[]) {
 	close(STDERR_FILENO);
 
 	/* Daemon-specific initialization goes here */
-	char* filename = "/tmp/bora/gbsd.log";
+
+	/* Create directory if it does not exist */
+	struct stat st = {0};
+	if (stat("/tmp/bora", &st) == -1) {
+	    mkdir("/tmp/bora", 0755);
+	}
+
+	/* Get daemon PID and create log file */
 	int daemon_pid = getpid();
-	// TODO: make directory if it does not exist
+	log_message(filename, "ipcd started with PID: %d", daemon_pid);
 
 	/* Create shared memory segment */
-	key_t key = 1234; 			/* key to be passed to shmget() */ 
-	int shmflg = IPC_CREAT | 0666; 		/* shmflg to be passed to shmget() */ 
-	int shmid; 							/* return value from shmget() */ 
-	int size = sizeof(shmseg_t);		/* size to be passed to shmget() */ 
+	shm_unlink(SHM_NAME); // Unlink any memory which has been created before. Not doing this fails ftruncate.
 
-	// TODO: convert to POSIX shared memory API
-
-	if ((shmid = shmget(key, size, shmflg)) == -1) {
-		log_message(filename, "shmget: shmget failed");
+	int shmid; /* shared memory file descriptor */
+	if ((shmid = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666)) == -1) {
+		log_message(filename, "shm_open: shm_open failed:%s", strerror(errno));
 		exit(EXIT_FAILURE);
-	} 
-	else {
-		log_message(filename, "shmget: shmget returned %d", shmid);
+	}
+	
+	/* Set the size of the memory segment (one-time operation) */
+	if (ftruncate(shmid, sizeof(shmseg_t)) == -1) {
+		log_message(filename, "ftruncate: ftruncate failed:%s", strerror(errno));
+		exit(EXIT_FAILURE);
 	}
 
 	/* Attach shared memory segment */
 	char* shmaddr; /* pointer to the attached segment */
-
-	if ((shmaddr = shmat(shmid, NULL, 0)) == (char *)-1) {
-		log_message(filename, "shmat: shmat failed");
+	if ((shmaddr = mmap(NULL, sizeof(shmseg_t), PROT_READ|PROT_WRITE, MAP_SHARED, shmid, 0)) == (char *)-1) {
+		log_message(filename, "mmap: mmap failed, error:%s", strerror(errno));
 		exit(EXIT_FAILURE);
-	}
-	else {
-		log_message(filename, "shmat: shmat success");
 	}
 
 	/* Initialize data structure with zeroes */
@@ -113,14 +117,10 @@ int main(int argc, char *argv[]) {
 	my_data->result = 0;
 
 	/* Initialize semaphore */
-	const char* sem_name = "IPCD_SEM";
 	sem_t* semaphore;
-	if ((semaphore = sem_open(sem_name, O_CREAT, 0666, 0)) == (sem_t *)-1) {
+	if ((semaphore = sem_open(SEM_NAME, O_CREAT, 0666, 0)) == (sem_t *)-1) {
 		log_message(filename, "sem_open: sem_open failed");
 		exit(EXIT_FAILURE);
-	}
-	else {
-		log_message(filename, "sem_open: sem_open success");
 	}
 
 	/* The Big Loop */
@@ -134,9 +134,6 @@ int main(int argc, char *argv[]) {
 
 		/* Post semaphore to indicate that the result is available */
 		sem_post(semaphore);
-
-		// TEMP
-		sleep(1);
 	}
 
  	exit(EXIT_SUCCESS);
