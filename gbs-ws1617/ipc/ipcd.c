@@ -116,9 +116,16 @@ int main(int argc, char *argv[]) {
 	my_data->input = 0;
 	my_data->result = 0;
 
-	/* Initialize semaphore */
-	sem_t* semaphore;
-	if ((semaphore = sem_open(SEM_NAME, O_CREAT, 0666, 0)) == (sem_t *)-1) {
+	/* Initialize begin semaphore */
+	sem_t* semaphore_begin;
+	if ((semaphore_begin = sem_open(SEM_NAME, O_CREAT, 0666, 0)) == (sem_t *)-1) {
+		log_message(filename, "sem_open: sem_open failed");
+		exit(EXIT_FAILURE);
+	}
+
+	/* Initialize end semaphore */
+	sem_t* semaphore_end;
+	if ((semaphore_end = sem_open(SEM_NAME, O_CREAT, 0666, 0)) == (sem_t *)-1) {
 		log_message(filename, "sem_open: sem_open failed");
 		exit(EXIT_FAILURE);
 	}
@@ -126,14 +133,14 @@ int main(int argc, char *argv[]) {
 	/* The Big Loop */
 	while (1) {
 		/* Wait using semaphore for the client input. */
-		sem_wait(semaphore);
+		sem_wait(semaphore_begin);
 
 		/* compute Fib(n) and write the result to the shared memory segment */
 		my_data->result = fib(my_data->input);
 		log_message(filename, "Daemon PID: %d, Computation complete: fib(%d) = %d", daemon_pid, my_data->input, my_data->result);
 
 		/* Post semaphore to indicate that the result is available */
-		sem_post(semaphore);
+		sem_post(semaphore_end);
 	}
 
  	exit(EXIT_SUCCESS);

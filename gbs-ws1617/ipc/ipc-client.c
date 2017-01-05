@@ -60,9 +60,16 @@ int main(int argc, char *argv[]) {
 	/* Create a shmseg_t pointer to the shared memory segment */
 	shmseg_t* my_data = (shmseg_t*) shmaddr;
 
-	/* Open previously created semaphore */
-	sem_t* semaphore;
-	if ((semaphore = sem_open(SEM_NAME, 0)) == (sem_t *)-1) {
+	/* Open previously created begin semaphore */
+	sem_t* semaphore_begin;
+	if ((semaphore_begin = sem_open(SEM_NAME, 0)) == (sem_t *)-1) {
+		perror("sem_open: sem_open failed");
+		exit(EXIT_FAILURE);
+	}
+
+	/* Open previously created end semaphore */
+	sem_t* semaphore_end;
+	if ((semaphore_end = sem_open(SEM_NAME, 0)) == (sem_t *)-1) {
 		perror("sem_open: sem_open failed");
 		exit(EXIT_FAILURE);
 	}
@@ -71,10 +78,10 @@ int main(int argc, char *argv[]) {
 	my_data->input = input;
 
 	/* Post semaphore to indicate that the input is available */
-	sem_post(semaphore);
+	sem_post(semaphore_begin);
 
 	/* Wait for the daemon to compute */
-	sem_wait(semaphore);
+	sem_wait(semaphore_end);
 
 	/* Print result */
 	fprintf(stdout, "Result = %d\n", my_data->result);
