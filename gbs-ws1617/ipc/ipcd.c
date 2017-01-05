@@ -118,14 +118,14 @@ int main(int argc, char *argv[]) {
 
 	/* Initialize begin semaphore */
 	sem_t* semaphore_begin;
-	if ((semaphore_begin = sem_open(SEM_NAME, O_CREAT, 0666, 0)) == (sem_t *)-1) {
+	if ((semaphore_begin = sem_open(SEM_NAME_BEGIN, O_CREAT, 0666, 0)) == (sem_t *)-1) {
 		log_message(filename, "sem_open: sem_open failed");
 		exit(EXIT_FAILURE);
 	}
 
 	/* Initialize end semaphore */
 	sem_t* semaphore_end;
-	if ((semaphore_end = sem_open(SEM_NAME, O_CREAT, 0666, 0)) == (sem_t *)-1) {
+	if ((semaphore_end = sem_open(SEM_NAME_END, O_CREAT, 0666, 0)) == (sem_t *)-1) {
 		log_message(filename, "sem_open: sem_open failed");
 		exit(EXIT_FAILURE);
 	}

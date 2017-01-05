@@ -4,7 +4,7 @@ CC = gcc
 CFLAGS  = -Wall -g
 OBJ_DAEMON = ipcd.o
 OBJ_CLIENT = ipc-client.o
-LIBS = -lpthread
+LIBS = -lpthread -lrt
 
 all: ipcd ipc-client
 

@@ -62,14 +62,14 @@ int main(int argc, char *argv[]) {
 
 	/* Open previously created begin semaphore */
 	sem_t* semaphore_begin;
-	if ((semaphore_begin = sem_open(SEM_NAME, 0)) == (sem_t *)-1) {
+	if ((semaphore_begin = sem_open(SEM_NAME_BEGIN, 0)) == (sem_t *)-1) {
 		perror("sem_open: sem_open failed");
 		exit(EXIT_FAILURE);
 	}
 
 	/* Open previously created end semaphore */
 	sem_t* semaphore_end;
-	if ((semaphore_end = sem_open(SEM_NAME, 0)) == (sem_t *)-1) {
+	if ((semaphore_end = sem_open(SEM_NAME_END, 0)) == (sem_t *)-1) {
 		perror("sem_open: sem_open failed");
 		exit(EXIT_FAILURE);
 	}
