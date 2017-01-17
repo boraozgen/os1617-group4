@@ -130,6 +130,15 @@ int main(int argc, char *argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
+	/* Assignment 5 - Part (a) */
+
+	/* Initialize mutex semaphore. Initialized with value = 1, so that the first client can enter the critical section */
+	sem_t* semaphore_mutex;
+	if ((semaphore_mutex = sem_open(SEM_NAME_MUTEX, O_CREAT, 0666, 1)) == (sem_t *)-1) {
+		log_message(filename, "sem_open: sem_open failed");
+		exit(EXIT_FAILURE);
+	}
+
 	/* The Big Loop */
 	while (1) {
 		/* Wait using semaphore for the client input. */

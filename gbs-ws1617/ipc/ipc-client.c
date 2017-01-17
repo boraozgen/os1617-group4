@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <semaphore.h>
 
-#define MAX_FIB_ARG 40
+#define MAX_FIB_ARG 45
 
 int main(int argc, char *argv[]) {
 
@@ -40,8 +40,7 @@ int main(int argc, char *argv[]) {
 	}
 	
 	/* Welcome message */
-	fprintf(stdout, "Welcome to the ipc-client!\n"
-		"Computing fib(%d)...\n", input);
+	fprintf(stdout, "Welcome to the ipc-client!\n");
 
 	/* Open previously created shared memory segment */
 	int shmid;
@@ -74,6 +73,18 @@ int main(int argc, char *argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
+	/* Open previously created mutex semaphore */
+	sem_t* semaphore_mutex;
+	if ((semaphore_mutex = sem_open(SEM_NAME_MUTEX, 0)) == (sem_t *)-1) {
+		perror("sem_open: sem_open failed");
+		exit(EXIT_FAILURE);
+	}
+
+	/* Wait for the mutex to be released */
+	sem_wait(semaphore_mutex);
+
+	fprintf(stdout, "Computing fib(%d)...\n", input);
+
 	/* Set input as the argument provided */
 	my_data->input = input;
 
@@ -85,6 +96,9 @@ int main(int argc, char *argv[]) {
 
 	/* Print result */
 	fprintf(stdout, "Result = %d\n", my_data->result);
+
+	/* Release mutex so that other clients can input their data */
+	sem_post(semaphore_mutex);
 
 	/* Detach shared memory */
 	if (munmap((void*)shmaddr, sizeof(shmseg_t)) == -1) {
