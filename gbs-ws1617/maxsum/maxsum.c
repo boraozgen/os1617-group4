@@ -2,11 +2,21 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <time.h>    // time()
+#include <pthread.h>
+#include <unistd.h>
 
 #define MAX_MATRIX_SIZE 10
 
+/* Thread arguments struct */
+typedef struct thread_args_t {
+	int** inMatrix;
+	int** outMatrix;
+	int col;
+	int num_rows;
+} ThreadArgs;
+
 /* Compute the maximum value in column [col] of matrix [inMatrix] */
-int col_max(int** inMatrix, int col, int num_rows) {
+void col_max(int** inMatrix, int** outMatrix, int col, int num_rows) {
 	int i;
 	int max = INT_MIN;
 
@@ -18,7 +28,15 @@ int col_max(int** inMatrix, int col, int num_rows) {
 		}
 	}
 
-	return max;
+	outMatrix[0][col] = max;
+}
+
+/* Thread routine */
+void* thread_routine(void* thread_args) {
+	ThreadArgs *data;
+	data = (ThreadArgs*) thread_args;
+	col_max(data->inMatrix, data->outMatrix, data->col, data->num_rows);
+	pthread_exit(NULL);
 }
 
 /* Dynamically allocate matrix */
@@ -56,11 +74,19 @@ int main(int argc, char *argv[]) {
 	// Output matrix C
 	int** matrixC = NULL;
 	int num_rows, num_cols;
-	int i, j;
+	int i, j, rc;
 
 	// TEST
 	num_rows = 5;
 	num_cols = 5;
+
+	pthread_t threads[num_cols];
+	pthread_attr_t attr;
+	void *status;
+
+	/* Initialize and set thread detached attribute */
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
 	// Allocate memory for matrices
 	alloc_matrix(&matrixA, num_rows, num_cols);
@@ -92,13 +118,35 @@ int main(int argc, char *argv[]) {
 	print_matrix(matrixS, num_rows, num_cols);
 
 	// Compute max for each column. To be assigned to threads.
+	ThreadArgs args[num_cols];
 	for (i = 0; i < num_cols; i++)
 	{
-		matrixC[0][i] = col_max(matrixS, i, num_rows);
+		args[i].inMatrix = matrixS;
+		args[i].outMatrix = matrixC;
+		args[i].col = i;
+		args[i].num_rows = num_rows;
+		rc = pthread_create(&threads[i], &attr, thread_routine, (void*) &args[i]);
+		if (rc){
+			printf("ERROR; return code from pthread_create() is %d\n", rc);
+			exit(-1);
+       	}
 	}
+
+	/* Free attribute and wait for the other threads */
+    pthread_attr_destroy(&attr);
+    for (i = 0; i < num_cols; i++) {
+		rc = pthread_join(threads[i], &status);
+		if (rc) {
+			printf("ERROR; return code from pthread_join() is %d\n", rc);
+			exit(-1);
+		}
+   	}
 
 	printf("Matrix C:\n");
 	print_matrix(matrixC, 1, num_cols);
 
+	pthread_exit(NULL);
 	exit(EXIT_SUCCESS); // exit normally
 }
+
+/* Helpful link: https://computing.llnl.gov/tutorials/pthreads/ */
