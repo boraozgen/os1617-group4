@@ -48,8 +48,9 @@ void* thread_routine(void* thread_args) {
 
 /* Dynamically allocate matrix */
 void alloc_matrix(int*** matrix_ptr, int num_rows, int num_cols) {
+	int i;
 	*matrix_ptr = (int **)malloc(num_rows * sizeof(int*));
-	for (int i = 0; i < num_rows; i++) (*matrix_ptr)[i] = (int *)malloc(num_cols * sizeof(int));
+	for (i = 0; i < num_rows; i++) (*matrix_ptr)[i] = (int *)malloc(num_cols * sizeof(int));
 }
 
 /* Fill matrix with random numbers */
