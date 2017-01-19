@@ -4,38 +4,45 @@
 #include <time.h>    // time()
 #include <pthread.h>
 #include <unistd.h>
+#include <string.h>
 
 #define MAX_MATRIX_SIZE 10
 
 /* Thread arguments struct */
 typedef struct thread_args_t {
-	int** inMatrix;
+	int** inMatrixA;
+	int** inMatrixB;
 	int** outMatrix;
 	int col;
 	int num_rows;
 } ThreadArgs;
 
-/* Compute the maximum value in column [col] of matrix [inMatrix] */
-void col_max(int** inMatrix, int** outMatrix, int col, int num_rows) {
+/* Compute the maximum of column sums of A and B and write to C */
+void col_summax(int** inMatrixA, int**inMatrixB, int** outMatrix, int col, int num_rows) {
 	int i;
 	int max = INT_MIN;
+	int temp;
 
+	/* For each row */
 	for (i = 0; i < num_rows; i++)
 	{
-		if (inMatrix[i][col] > max)
+		/* Compute the sum of selected elements */
+		temp = inMatrixA[i][col] + inMatrixB[i][col];
+
+		/* Compute the maximum */
+		if (temp > max)
 		{
-			max = inMatrix[i][col];
+			max = temp;
 		}
 	}
 
 	outMatrix[0][col] = max;
 }
-
 /* Thread routine */
 void* thread_routine(void* thread_args) {
 	ThreadArgs *data;
 	data = (ThreadArgs*) thread_args;
-	col_max(data->inMatrix, data->outMatrix, data->col, data->num_rows);
+	col_summax(data->inMatrixA, data->inMatrixB, data->outMatrix, data->col, data->num_rows);
 	pthread_exit(NULL);
 }
 
@@ -69,16 +76,22 @@ int main(int argc, char *argv[]) {
 	// Input matrices A, B
 	int** matrixA = NULL; 
 	int** matrixB = NULL; 
-	// Sum matrix S
-	int** matrixS = NULL;
 	// Output matrix C
 	int** matrixC = NULL;
 	int num_rows, num_cols;
-	int i, j, rc;
+	int i, rc;
 
-	// TEST
-	num_rows = 5;
-	num_cols = 5;
+	if (argc == 3)
+	{
+		/* Get arguments */
+		num_rows = (int) strtol(argv[1], (char **)NULL, 10);
+		num_cols = (int) strtol(argv[2], (char **)NULL, 10);
+	}	
+	else {
+		/* Defaults */
+		num_rows = 10;
+		num_cols = 10;
+	}
 
 	pthread_t threads[num_cols];
 	pthread_attr_t attr;
@@ -91,7 +104,6 @@ int main(int argc, char *argv[]) {
 	// Allocate memory for matrices
 	alloc_matrix(&matrixA, num_rows, num_cols);
 	alloc_matrix(&matrixB, num_rows, num_cols);
-	alloc_matrix(&matrixS, num_rows, num_cols);
 	alloc_matrix(&matrixC, 1, num_cols);
 
 	// Randomly fill matrix A and B
@@ -105,23 +117,12 @@ int main(int argc, char *argv[]) {
 	printf("Matrix B:\n");
 	print_matrix(matrixB, num_rows, num_cols);
 
-	// Compute the sum matrix S
-	for (i = 0; i < num_rows; i++)
-	{
-		for (j = 0; j < num_cols; j++)
-		{
-			matrixS[i][j] = matrixA[i][j] + matrixB[i][j];
-		}
-	}
-
-	printf("Sum matrix:\n");
-	print_matrix(matrixS, num_rows, num_cols);
-
 	// Compute max for each column. To be assigned to threads.
 	ThreadArgs args[num_cols];
 	for (i = 0; i < num_cols; i++)
 	{
-		args[i].inMatrix = matrixS;
+		args[i].inMatrixA = matrixA;
+		args[i].inMatrixB = matrixB;
 		args[i].outMatrix = matrixC;
 		args[i].col = i;
 		args[i].num_rows = num_rows;
@@ -144,6 +145,8 @@ int main(int argc, char *argv[]) {
 
 	printf("Matrix C:\n");
 	print_matrix(matrixC, 1, num_cols);
+
+	printf("\nTip: Run './maxsum [num_rows] [num_cols] to test with other matrix sizes.\n\n");
 
 	pthread_exit(NULL);
 	exit(EXIT_SUCCESS); // exit normally
