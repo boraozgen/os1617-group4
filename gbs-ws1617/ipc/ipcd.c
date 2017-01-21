@@ -117,6 +117,8 @@ int main(int argc, char *argv[]) {
 	my_data->result = 0;
 
 	/* Initialize begin semaphore */
+	sem_unlink(SEM_NAME_BEGIN);
+
 	sem_t* semaphore_begin;
 	if ((semaphore_begin = sem_open(SEM_NAME_BEGIN, O_CREAT, 0666, 0)) == (sem_t *)-1) {
 		log_message(filename, "sem_open: sem_open failed");
@@ -124,6 +126,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	/* Initialize end semaphore */
+	sem_unlink(SEM_NAME_END);
+
 	sem_t* semaphore_end;
 	if ((semaphore_end = sem_open(SEM_NAME_END, O_CREAT, 0666, 0)) == (sem_t *)-1) {
 		log_message(filename, "sem_open: sem_open failed");
@@ -131,6 +135,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	/* Assignment 5 - Part (a) */
+	sem_unlink(SEM_NAME_MUTEX);
 
 	/* Initialize mutex semaphore. Initialized with value = 1, so that the first client can enter the critical section */
 	sem_t* semaphore_mutex;

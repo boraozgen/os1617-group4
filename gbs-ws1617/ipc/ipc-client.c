@@ -10,8 +10,11 @@
 #include <errno.h>
 #include <unistd.h>
 #include <semaphore.h>
+#include <string.h>
 
-#define MAX_FIB_ARG 45
+#define MAX_FIB_ARG			45
+#define CHILD_COUNT 		5
+#define MULTI_INPUT_VALUE 	30
 
 int main(int argc, char *argv[]) {
 
@@ -20,27 +23,67 @@ int main(int argc, char *argv[]) {
 	if (argc != 2) 
 	{
 		printf("Invalid argument count.\n"
-			"Usage: ipc-client [input]\n");	
+			"Usage: ipc-client [input]\n"
+			"Multi-client test (assignment 5): ipc-client multi\n");	
 		exit(EXIT_FAILURE);
 	}
 	else
 	{
-		input = (int) strtol(argv[1], (char **)NULL, 10);
+		/* Multi client mode */
+		if (!strcmp(argv[1], "multi"))
+		{
+			int i;
+			pid_t pid;
 
-		if (input < 0)
-		{
-			printf("Invalid input. Input can not be lower than zero!\n");
-			exit(EXIT_FAILURE);
+			/* Welcome message */
+			fprintf(stdout, "Welcome to the ipc-client multi mode!\n");
+
+			for(i = 0; i < CHILD_COUNT; i++)
+			{
+				/* Fork off the parent process */
+				pid = fork();
+				/* Assign input values to child processes */
+				input = i + MULTI_INPUT_VALUE;
+				/* If child, break and continue with the code */
+				if (pid == 0) break;
+				/* Error check */
+				else if (pid < 0) {
+					exit(EXIT_FAILURE);
+				}
+			}
+
+			/* Parent process */
+			if (pid > 0) {
+				/* Wait for all child processes */
+				while ((pid = waitpid(-1, NULL, 0))) {
+				   if (errno == ECHILD) {
+				      break;
+				   }
+				}
+				/* Exit after all children have finished */
+				exit(EXIT_SUCCESS);
+			}
 		}
-		else if (input > MAX_FIB_ARG)
-		{
-			printf("Invalid input. Input can not be higher than %d!\n", MAX_FIB_ARG);
-			exit(EXIT_FAILURE);
+		/* Single input mode */
+		else
+		{		
+			input = (int) strtol(argv[1], (char **)NULL, 10);
+
+			if (input < 0)
+			{
+				printf("Invalid input. Input can not be lower than zero!\n");
+				exit(EXIT_FAILURE);
+			}
+			else if (input > MAX_FIB_ARG)
+			{
+				printf("Invalid input. Input can not be higher than %d!\n", MAX_FIB_ARG);
+				exit(EXIT_FAILURE);
+			}
+
+			/* Welcome message */
+			fprintf(stdout, "Welcome to the ipc-client!\n");
 		}
 	}
-	
-	/* Welcome message */
-	fprintf(stdout, "Welcome to the ipc-client!\n");
 
 	/* Open previously created shared memory segment */
 	int shmid;
@@ -95,7 +138,7 @@ int main(int argc, char *argv[]) {
 	sem_wait(semaphore_end);
 
 	/* Print result */
-	fprintf(stdout, "Result = %d\n", my_data->result);
+	fprintf(stdout, "fib(%d) Result = %d\n", my_data->input, my_data->result);
 
 	/* Release mutex so that other clients can input their data */
 	sem_post(semaphore_mutex);
